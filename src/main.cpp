@@ -21,6 +21,7 @@
 #include "secrets.h"   // WIFI_SSID / WIFI_PASS — used only as a FALLBACK if no creds
                        // have been provisioned via the captive portal (copy secrets.example.h)
 #include "certs.h"     // ROOT_CA_BUNDLE for validated HTTPS blocklist downloads
+#include "display.h"   // T-Display-S3 status UI (no-op on C3 builds)
 
 // ---- config ----
 #ifndef UPSTREAM_IP
@@ -753,6 +754,7 @@ static void startConfigPortal() {
 void setup() {
   Serial.begin(115200); delay(300);
   Serial.println("\n[c3-adblock] booting");
+  displayInit();  // no-op unless DISPLAY_ST7789; never blocks DNS
   if (!LittleFS.begin(true)) Serial.println("LittleFS FAILED");
   reopenBlocklist();
   loadCustom(); loadBanned(); loadUpdateCfg();
@@ -761,6 +763,8 @@ void setup() {
   // Hold BOOT at power-on to wipe saved WiFi and force the setup portal.
 #if CONFIG_IDF_TARGET_ESP32C3
   const int BOOT_PIN = 9;     // C3 BOOT button
+#elif defined(ARDUINO_LILYGO_T_DISPLAY_S3)
+  const int BOOT_PIN = 0;     // T-Display-S3 Button 1
 #else
   const int BOOT_PIN = 0;     // classic ESP32 BOOT button (GPIO9 is a flash pin there)
 #endif
@@ -822,5 +826,9 @@ void loop() {
     if (lastCheckMs == 0) lastCheckMs = now;   // skip an immediate fetch on boot
     else if (now - lastCheckMs >= updateIntervalH * 3600000UL) { lastCheckMs = now; fetchBlocklist(updateUrl); }
   }
+#ifdef DISPLAY_ST7789
+  displayTick(blockingOn, totalBlocked, totalAllowed, numHashes, numClients,
+              WiFi.localIP().toString().c_str());
+#endif
   if (!busy) delay(1);   // sleep only when idle: full speed under load, cool when quiet
 }
